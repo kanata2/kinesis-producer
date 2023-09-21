@@ -75,6 +75,7 @@ func (p *Producer) Put(data []byte, partitionKey string) error {
 		return ErrIllegalPartitionKey
 	}
 	nbytes := len(data) + len([]byte(partitionKey))
+
 	// if the record size is bigger than aggregation size
 	// handle it as a simple kinesis record
 	if nbytes > p.AggregateBatchSize {
@@ -177,7 +178,7 @@ func (p *Producer) loop() {
 		// the record size limit applies to the total size of the
 		// partition key and data blob.
 		rsize := len(record.Data) + len([]byte(*record.PartitionKey))
-		if size+rsize > p.BatchSize {
+		if size != 0 && size+rsize > p.BatchSize {
 			flush("batch size")
 		}
 		size += rsize
@@ -242,7 +243,9 @@ func (p *Producer) flush(records []*kinesis.PutRecordsRequestEntry, reason strin
 	defer p.semaphore.release()
 
 	for {
-		p.Logger.Info("flushing records", LogValue{"reason", reason}, LogValue{"records", len(records)})
+		if p.Verbose {
+			p.Logger.Info("flushing records", LogValue{"reason", reason}, LogValue{"records", len(records)}, LogValue{"size", total})
+		}
 		out, err := p.Client.PutRecords(&kinesis.PutRecordsInput{
 			StreamName: &p.StreamName,
 			Records:    records,
